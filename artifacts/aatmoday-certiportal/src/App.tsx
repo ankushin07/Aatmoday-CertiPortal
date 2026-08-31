@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { toPng } from 'html-to-image';
+import { jsPDF } from 'jspdf';
 import Papa from 'papaparse';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -114,6 +116,10 @@ function initials(name: string) {
     .map((part) => part[0])
     .join('')
     .toUpperCase() || 'CV';
+}
+
+function fileSafeName(value: string) {
+  return value.trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'certificate';
 }
 
 function App() {
@@ -345,7 +351,90 @@ function CertificateTile({ record, index, onOpen }: { record: Participant; index
 
 function CertificateCard({ record }: { record: Participant }) {
   const value = `${window.location.origin}?verify=${record.uniqueId}`;
-  return <article className="certificate-paper relative overflow-hidden rounded-[20px] border-[5px] border-[hsl(var(--primary))] p-3 shadow-[0_16px_45px_hsl(221_45%_17%_/_0.14)]"><div className="certificate-ornament relative flex min-h-[420px] flex-col items-center justify-between border border-[hsl(var(--primary)_/_0.5)] px-6 py-9 text-center sm:px-12"><div className="absolute left-5 top-5 size-11 border-l border-t border-[hsl(var(--accent-foreground)_/_0.45)]" /><div className="absolute bottom-5 right-5 size-11 border-b border-r border-[hsl(var(--accent-foreground)_/_0.45)]" /><div><div className="flex items-center justify-center gap-2 text-[hsl(var(--primary))]"><span className="flex size-8 items-center justify-center rounded-lg bg-[hsl(var(--accent))]"><Code2 size={18} /></span><span className="font-mono text-[11px] font-bold uppercase tracking-[0.22em]">Code Vidya</span></div><p className="mt-7 font-mono text-[10px] font-bold uppercase tracking-[0.36em] text-[hsl(var(--accent-foreground))]">Certificate of participation</p></div><div><h3 className="font-serif text-4xl font-bold tracking-tight text-[hsl(var(--primary))] sm:text-5xl">{record.name}</h3><p className="mx-auto mt-3 max-w-md text-sm text-[hsl(var(--primary)_/_0.72)]">for participating in</p><p className="mt-2 font-serif text-2xl font-bold text-[hsl(var(--primary))]">Code Vidya Hack Days</p></div><div className="flex w-full max-w-md items-end justify-between gap-5"><div className="text-left"><p className="font-mono text-[9px] uppercase tracking-[0.18em] text-[hsl(var(--primary)_/_0.55)]">Issued on</p><p className="mt-1 text-sm font-semibold text-[hsl(var(--primary))]">{formatDate(record.date)}</p><div className="mt-3 h-px w-28 bg-[hsl(var(--primary)_/_0.3)]" /></div><div className="rounded-xl bg-[hsl(var(--card)_/_0.7)] p-2"><QRCodeSVG value={value} size={72} bgColor="#f7f2e7" fgColor="#192b4a" level="M" /></div><div className="text-right"><p className="font-mono text-[9px] uppercase tracking-[0.18em] text-[hsl(var(--primary)_/_0.55)]">Certificate ID</p><p className="mt-1 font-mono text-xs font-bold text-[hsl(var(--primary))]">{record.uniqueId}</p><div className="mt-3 ml-auto h-px w-28 bg-[hsl(var(--primary)_/_0.3)]" /></div></div></div></article>;
+  const certificateRef = useRef<HTMLDivElement>(null);
+  const [downloading, setDownloading] = useState<'png' | 'pdf' | null>(null);
+  const [downloadError, setDownloadError] = useState('');
+
+  const downloadCertificate = async (format: 'png' | 'pdf') => {
+    if (!certificateRef.current) return;
+    setDownloading(format);
+    setDownloadError('');
+    try {
+      const image = await toPng(certificateRef.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: '#f7f2e7',
+      });
+      const baseName = `code-vidya-${fileSafeName(record.uniqueId || record.name)}`;
+      if (format === 'png') {
+        const link = document.createElement('a');
+        link.download = `${baseName}.png`;
+        link.href = image;
+        link.click();
+      } else {
+        const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        pdf.addImage(image, 'PNG', 15, 15, 267, 180);
+        pdf.save(`${baseName}.pdf`);
+      }
+    } catch {
+      setDownloadError('This certificate could not be exported. Please try again.');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  return (
+    <article className="overflow-hidden rounded-[20px] border-[5px] border-[hsl(var(--primary))] bg-[hsl(var(--card))] shadow-[0_16px_45px_hsl(221_45%_17%_/_0.14)]">
+      <div ref={certificateRef} className="certificate-paper relative m-3 overflow-hidden rounded-[10px] border border-[hsl(var(--primary)_/_0.5)]">
+        <div className="certificate-ornament relative flex min-h-[420px] flex-col items-center justify-between px-6 py-9 text-center sm:px-12">
+          <div className="absolute left-5 top-5 size-11 border-l border-t border-[hsl(var(--accent-foreground)_/_0.45)]" />
+          <div className="absolute bottom-5 right-5 size-11 border-b border-r border-[hsl(var(--accent-foreground)_/_0.45)]" />
+          <div>
+            <div className="flex items-center justify-center gap-2 text-[hsl(var(--primary))]">
+              <span className="flex size-8 items-center justify-center rounded-lg bg-[hsl(var(--accent))]"><Code2 size={18} /></span>
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.22em]">Code Vidya</span>
+            </div>
+            <p className="mt-7 font-mono text-[10px] font-bold uppercase tracking-[0.36em] text-[hsl(var(--accent-foreground))]">Certificate of participation</p>
+          </div>
+          <div>
+            <h3 className="font-serif text-4xl font-bold tracking-tight text-[hsl(var(--primary))] sm:text-5xl">{record.name}</h3>
+            <p className="mx-auto mt-3 max-w-md text-sm text-[hsl(var(--primary)_/_0.72)]">for participating in</p>
+            <p className="mt-2 font-serif text-2xl font-bold text-[hsl(var(--primary))]">Code Vidya Hack Days</p>
+          </div>
+          <div className="flex w-full max-w-md items-end justify-between gap-5">
+            <div className="text-left">
+              <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-[hsl(var(--primary)_/_0.55)]">Issued on</p>
+              <p className="mt-1 text-sm font-semibold text-[hsl(var(--primary))]">{formatDate(record.date)}</p>
+              <div className="mt-3 h-px w-28 bg-[hsl(var(--primary)_/_0.3)]" />
+            </div>
+            <div className="rounded-xl bg-[hsl(var(--card)_/_0.7)] p-2">
+              <QRCodeSVG value={value} size={72} bgColor="#f7f2e7" fgColor="#192b4a" level="M" />
+            </div>
+            <div className="text-right">
+              <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-[hsl(var(--primary)_/_0.55)]">Certificate ID</p>
+              <p className="mt-1 font-mono text-xs font-bold text-[hsl(var(--primary))]">{record.uniqueId}</p>
+              <div className="mt-3 ml-auto h-px w-28 bg-[hsl(var(--primary)_/_0.3)]" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[hsl(var(--border))] px-4 py-3">
+        <div>
+          <p className="text-xs font-bold text-[hsl(var(--foreground))]">Download certificate</p>
+          <p className="mt-0.5 text-[10px] text-[hsl(var(--muted-foreground))]">Print-ready PNG or PDF</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => void downloadCertificate('png')} disabled={downloading !== null} data-testid={`button-download-png-${record.uniqueId}`} className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs font-bold text-[hsl(var(--foreground))] transition hover:border-[hsl(var(--accent))] hover:bg-[hsl(var(--muted))] disabled:cursor-wait disabled:opacity-60">
+            <Download size={14} /> {downloading === 'png' ? 'Preparing…' : 'Download PNG'}
+          </button>
+          <button type="button" onClick={() => void downloadCertificate('pdf')} disabled={downloading !== null} data-testid={`button-download-pdf-${record.uniqueId}`} className="inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--primary))] px-3 py-2 text-xs font-bold text-[hsl(var(--primary-foreground))] transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60">
+            <Download size={14} className="text-[hsl(var(--accent))]" /> {downloading === 'pdf' ? 'Preparing…' : 'Download PDF'}
+          </button>
+        </div>
+      </div>
+      {downloadError && <p className="border-t border-[hsl(var(--destructive)_/_0.2)] bg-[hsl(var(--destructive)_/_0.06)] px-4 py-2 text-xs text-[hsl(var(--destructive))]" role="alert">{downloadError}</p>}
+    </article>
+  );
 }
 
 function EmptyPublish({ onBack }: { onBack: () => void }) {
