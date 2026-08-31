@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Aatmoday CertiPortal"
+description = "A single-page certificate operations portal for Code Vidya Hack Days. Upload or load participant data, clean it with an optional Gemini-powered workflow, generate branded certificates with QR verification, and validate certificates instantly from a URL."
+version = "1.0.0"
+id = "artifacts/aatmoday-certiportal"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19989
+
+[services.development]
+run = "pnpm --filter @workspace/aatmoday-certiportal run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/aatmoday-certiportal", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/aatmoday-certiportal/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19989"
+BASE_PATH = "/"
